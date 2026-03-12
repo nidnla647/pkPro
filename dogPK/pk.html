@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>小狗PK</title>
+    <style>
+        :root { --gold: #f1c40f; --glass: rgba(0, 0, 0, 0.8); --dmg-red: #ff4757; }
+        
+        body { 
+            margin: 0; 
+            /* 槽位1：背景图 */
+            background: url('back.png') no-repeat center center fixed;
+            background-size: cover; background-color: #222; 
+            color: white; font-family: "Microsoft YaHei", sans-serif; 
+            display: flex; flex-direction: column; align-items: center; min-height: 100vh; overflow: hidden;
+        }
+        
+        #game-stage {
+            width: 1000px; height: 720px; margin-top: 20px;
+            background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(12px);
+            border: 4px solid var(--gold); border-radius: 40px; position: relative;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8); display: none;
+        }
+
+        .arena { display: flex; justify-content: space-around; align-items: center; height: 60%; }
+        .dog-unit { width: 280px; text-align: center; position: relative; transition: 0.3s; }
+        .dog-unit.active { transform: scale(1.05); filter: drop-shadow(0 0 30px var(--gold)); }
+        
+        .dog-image-box {
+            width: 240px; height: 240px; margin: 0 auto; border-radius: 20px;
+            border: 4px solid white; background: rgba(0,0,0,0.6); overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .dog-image-box img { width: 100%; height: 100%; object-fit: cover; }
+
+        .control-panel {
+            position: absolute; bottom: 0; width: 100%; height: 38%;
+            background: var(--glass); border-top: 3px solid var(--gold);
+            display: flex; box-sizing: border-box; padding: 20px; gap: 20px;
+        }
+
+        .skill-grid {
+            flex: 2; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 10px;
+            overflow-y: auto;
+        }
+        
+        button {
+            padding: 10px; background: linear-gradient(#444, #111); border: 2px solid var(--gold);
+            color: var(--gold); border-radius: 8px; cursor: pointer; font-weight: bold;
+            flex: 0 1 140px; font-size: 13px; transition: 0.2s;
+        }
+        button:hover:not(:disabled) { background: var(--gold); color: black; }
+        button:disabled { border-color: #555; color: #666; opacity: 0.5; }
+
+        .log-box { flex: 1.2; background: rgba(0,0,0,0.4); border-radius: 15px; padding: 15px; font-size: 13px; overflow-y: auto; border: 1px solid #444; }
+        .hp-bar { width: 100%; height: 22px; background: #222; border: 2px solid #fff; border-radius: 11px; margin-top: 15px; overflow: hidden; }
+        .hp-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff4d4d, #2ed573); transition: width 0.5s; }
+        
+        .dmg-popup {
+            position: absolute; top: 10%; left: 50%; transform: translateX(-50%);
+            font-size: 45px; font-weight: 900; color: var(--dmg-red);
+            text-shadow: 2px 2px 0 #000; animation: floatUp 0.8s ease-out forwards; z-index: 100;
+        }
+        @keyframes floatUp { 0% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -100px); } }
+        @keyframes dash { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(50px); } }
+        .atk-anim { animation: dash 0.3s ease; }
+    </style>
+</head>
+<body>
+
+<h1 style="text-shadow: 0 0 15px var(--gold); margin: 15px;">🐾 小狗PK</h1>
+
+<div id="setup-screen" style="background: var(--glass); padding: 40px; border-radius: 20px; border: 2px solid var(--gold); text-align: center;">
+    <h2>请命：选择出战大将</h2>
+    玩家: <select id="p1-job" onchange="updatePreview(0, this.value)">
+        <option value="法师">法师</option>
+        <option value="战士">战士</option>
+        <option value="刺客">刺客</option>
+    </select>
+    &nbsp; VS &nbsp;
+    电脑: <select id="p2-job" onchange="updatePreview(1, this.value)">
+        <option value="战士">战士</option>
+        <option value="刺客">刺客</option>
+        <option value="法师">法师</option>
+    </select>
+    <br><br>
+    <button onclick="startGame()" style="width: 200px;">降临战场</button>
+</div>
+
+<div id="game-stage">
+    <div class="arena">
+        <div id="unit-0" class="dog-unit">
+            <div id="pop-0"></div>
+            <div class="dog-image-box"><img id="img-0" src="" alt="玩家"></div>
+            <h3>玩家 · <span id="job-txt-0" style="color:var(--gold)"></span></h3>
+            <div class="hp-bar"><div id="hp-0" class="hp-fill"></div></div>
+            <div id="st-0" style="color:var(--gold); font-size:12px; height:15px;"></div>
+        </div>
+
+        <div style="font-size: 40px; opacity: 0.3;">VS</div>
+
+        <div id="unit-1" class="dog-unit">
+            <div id="pop-1"></div>
+            <div class="dog-image-box"><img id="img-1" src="" alt="电脑"></div>
+            <h3>电脑 · <span id="job-txt-1" style="color:var(--gold)"></span></h3>
+            <div class="hp-bar"><div id="hp-1" class="hp-fill"></div></div>
+            <div id="st-1" style="color:var(--gold); font-size:12px; height:15px;"></div>
+        </div>
+    </div>
+
+    <div class="control-panel">
+        <div class="skill-grid" id="btn-container"></div>
+        <div class="log-box" id="game-log"></div>
+    </div>
+</div>
+
+<script>
+const CONFIG = {
+    // 职业图片槽位
+    '法师': 'fashi.png', 
+    '战士': 'zhanshi.png', 
+    '刺客': 'cike.png',
+    // 槽位5：全新音效槽位
+    'atk_sound': 'hurt.mp3' 
+};
+
+const JOB_DATA = {
+    '法师': { hp: 100, def: 35, atk: 15, skills: {'吸血':{cd:2, n:3}, '魔法攻击':{cd:0, n:99}, '缠绕':{cd:5, n:2}} },
+    '战士': { hp: 120, def: 90, atk: 5, skills: {'虎躯一震':{cd:3, n:4}, '战吼':{cd:3, n:3}, '剑气':{cd:1, n:5}} },
+    '刺客': { hp: 105, def: 55, atk: 11, skills: {'躲闪':{cd:3, n:4}, '偷梁换柱':{cd:9, n:1}, '暴击':{cd:4, n:2}} }
+};
+
+let state = { turn: 0, players: [], gameOver: false };
+
+window.onload = () => {
+    updatePreview(0, document.getElementById('p1-job').value);
+    updatePreview(1, document.getElementById('p2-job').value);
+};
+
+// 预加载音效以减少延迟
+let attackAudio = new Audio();
+function loadAudio() {
+    attackAudio.src = CONFIG.atk_sound;
+}
+
+function updatePreview(id, job) {
+    document.getElementById(`img-${id}`).src = CONFIG[job];
+}
+
+function startGame() {
+    loadAudio(); // 启动时加载音效
+    const j1 = document.getElementById('p1-job').value;
+    const j2 = document.getElementById('p2-job').value;
+    state.players = [makeP(0, j1, false), makeP(1, j2, true)];
+    
+    document.getElementById('img-0').src = CONFIG[j1];
+    document.getElementById('img-1').src = CONFIG[j2];
+    
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('game-stage').style.display = 'block';
+    updateUI();
+}
+
+function makeP(id, job, ai) {
+    let d = JOB_DATA[job];
+    let p = { id, job, isAi: ai, hp: d.hp, mHp: d.hp, def: d.def, atk: d.atk, sks: [], cnt: {}, cds: {}, bfs: { stun: false, shield: 1, entangle: 0, dodge: false } };
+    for(let s in d.skills) { p.sks.push(s); p.cnt[s] = d.skills[s].n; p.cds[s] = 0; }
+    return p;
+}
+
+function play(sk) {
+    if (state.gameOver) return;
+    const att = state.players[state.turn];
+    const def = state.players[1 - state.turn];
+    
+    // 触发攻击音效
+    if (attackAudio.src) {
+        attackAudio.currentTime = 0;
+        attackAudio.play().catch(e => console.warn("音效播放失败:", e));
+    }
+
+    if(sk !== '普攻') { att.cnt[sk]--; att.cds[sk] = JOB_DATA[att.job].skills[sk].cd; }
+
+    let dmg = 0;
+    if (sk === '吸血') { dmg = Math.min(20, def.hp * 0.15); att.hp = Math.min(att.mHp, att.hp + dmg); }
+    else if (sk === '魔法攻击') dmg = 25;
+    else if (sk === '缠绕') def.bfs.entangle = 5;
+    else if (sk === '虎躯一震') { dmg = 12; def.bfs.stun = true; }
+    else if (sk === '战吼') { att.hp = Math.min(att.mHp, att.hp + 15); att.bfs.shield = 0.65; }
+    else if (sk === '剑气') { dmg = (def.hp * 0.12) + (def.hp * 0.18); }
+    else if (sk === '躲闪') { if(Math.random() < 0.5) att.bfs.dodge = true; }
+    else if (sk === '偷梁换柱') {
+        let s = def.sks[Math.floor(Math.random()*def.sks.length)];
+        att.sks.push(s); att.cnt[s] = 1; att.cds[s] = 0;
+        addLog(`刺客窃取了 [${s}]！`); play(s); return;
+    }
+    else if (sk === '暴击') { dmg = 20 + (def.hp * 0.20); }
+
+    let final = Math.max(0, (att.atk + dmg) - (def.def * 0.5)) * def.bfs.shield;
+    if (def.bfs.dodge) { final = 0; def.bfs.dodge = false; addLog("💨 闪避！"); }
+
+    if(final > 0) { def.hp -= final; showDmg(def.id, final); }
+    addLog(`${att.isAi?'AI':'玩家'} [${sk}]: ${Math.round(final)} 伤害`);
+    
+    document.getElementById(`unit-${state.turn}`).classList.add('atk-anim');
+    setTimeout(()=>document.getElementById(`unit-${state.turn}`).classList.remove('atk-anim'), 300);
+
+    if(!checkWin()) next();
+}
+
+function next() {
+    let nextP = state.players[1 - state.turn];
+    for(let s in nextP.cds) if(nextP.cds[s] > 0) nextP.cds[s]--;
+    if(nextP.bfs.entangle > 0) { nextP.hp -= 5; nextP.bfs.entangle--; showDmg(nextP.id, 5); }
+
+    if(nextP.bfs.stun) {
+        nextP.bfs.stun = false; addLog(`${nextP.isAi?'AI':'玩家'}眩晕`);
+        updateUI(); if(state.players[state.turn].isAi) setTimeout(ai, 1000);
+    } else {
+        state.turn = 1 - state.turn;
+        state.players[state.turn].bfs.shield = 1;
+        updateUI(); if(state.players[state.turn].isAi) setTimeout(ai, 1000);
+    }
+}
+
+function ai() {
+    let p = state.players[1];
+    let can = p.sks.filter(s => p.cnt[s] > 0 && p.cds[s] <= 0);
+    play(can.length > 0 && Math.random() > 0.3 ? can[Math.floor(Math.random()*can.length)] : '普攻');
+}
+
+function showDmg(id, n) {
+    const el = document.getElementById(`pop-${id}`);
+    const d = document.createElement('div');
+    d.className = 'dmg-popup'; d.innerText = `-${Math.round(n)}`;
+    el.appendChild(d); setTimeout(()=>d.remove(), 800);
+}
+
+function updateUI() {
+    state.players.forEach((p, i) => {
+        document.getElementById(`hp-${i}`).style.width = (Math.max(0, p.hp) / p.mHp * 100) + "%";
+        document.getElementById(`unit-${i}`).className = "dog-unit " + (state.turn === i ? "active" : "");
+        document.getElementById(`job-txt-${i}`).innerText = p.job;
+        document.getElementById(`st-${i}`).innerText = (p.bfs.entangle>0?"🌿 ":"") + (p.bfs.stun?"😵 ":"");
+    });
+    const g = document.getElementById('btn-container');
+    if(state.players[state.turn].isAi) { g.innerHTML = "<h3>AI 思考中...</h3>"; } 
+    else {
+        const p = state.players[0];
+        g.innerHTML = `<button onclick="play('普攻')">普通攻击<br><small>无消耗</small></button>`;
+        p.sks.forEach(s => {
+            let off = p.cnt[s] <= 0 || p.cds[s] > 0;
+            g.innerHTML += `<button ${off?'disabled':''} onclick="play('${s}')">${s}<br><small>剩${p.cnt[s]} CD:${p.cds[s]}</small></button>`;
+        });
+    }
+}
+
+function addLog(m) {
+    const l = document.getElementById('game-log');
+    l.innerHTML = `<div>> ${m}</div>` + l.innerHTML;
+}
+
+function checkWin() {
+    for(let p of state.players) {
+        if(p.hp <= 0) { alert(`${p.id===0?'电脑':'玉帝'}获胜！`); location.reload(); return true; }
+    }
+    return false;
+}
+</script>
+</body>
+</html>
